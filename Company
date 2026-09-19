@@ -1,0 +1,1 @@
+    def deactivate(db: Session, company: Company) -

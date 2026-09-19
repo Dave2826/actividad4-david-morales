@@ -1,0 +1,1 @@
+    def get_by_tax_id(db: Session, tax_id: str) -
