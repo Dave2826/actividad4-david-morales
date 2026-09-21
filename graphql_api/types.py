@@ -34,3 +34,41 @@ class UpdateCompanyInput:
     email: Optional[str] = None
     phone: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+@strawberry.input
+class LoginInput:
+    email: str
+    password: str
+
+
+@strawberry.type
+class AuthUserType:
+    id: int
+    name: str
+    email: str
+
+
+@strawberry.type
+class AuthPayloadType:
+    token: str
+    token_type: str
+    user: AuthUserType
+
+
+@strawberry.input
+class CreateCompanyAdminInput:
+    company_id: int
+    name: str
+    email: str
+    password: str
+
+
+@strawberry.type
+class CompanyUserType:
+    id: int
+    company_id: int
+    user_id: int
+    is_admin: bool
+    is_active: bool
+    joined_at: datetime
