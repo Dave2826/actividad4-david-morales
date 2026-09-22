@@ -29,11 +29,9 @@ class CompanyUserService:
         if not company.is_active:
             raise ValueError("La empresa está inactiva")
 
-        existing_admin = (
-            CompanyUserRepository.get_admin_by_company(
-                db,
-                company_id
-            )
+        existing_admin = CompanyUserRepository.get_admin_by_company(
+            db,
+            company_id
         )
 
         if existing_admin:
@@ -63,7 +61,6 @@ class CompanyUserService:
 
         except IntegrityError:
             db.rollback()
-
             raise ValueError(
                 "No se pudo crear el administrador principal"
             )
@@ -82,9 +79,19 @@ class CompanyUserService:
             token
         )
 
+        company = CompanyRepository.get_by_id(
+            db,
+            company_id
+        )
+
+        if not company:
+            raise ValueError("La empresa no existe")
+
+        if not company.is_active:
+            raise ValueError("La empresa está inactiva")
+
         admin_relation = (
-            CompanyUserRepository
-            .get_admin_by_company_and_user(
+            CompanyUserRepository.get_admin_by_company_and_user(
                 db,
                 company_id,
                 current_user.id
@@ -96,21 +103,6 @@ class CompanyUserService:
                 "El usuario no es administrador de esta empresa"
             )
 
-        company = CompanyRepository.get_by_id(
-            db,
-            company_id
-        )
-
-        if not company:
-            raise ValueError(
-                "La empresa no existe"
-            )
-
-        if not company.is_active:
-            raise ValueError(
-                "La empresa está inactiva"
-            )
-
         user = UserService.create(
             db=db,
             name=name,
@@ -119,8 +111,7 @@ class CompanyUserService:
         )
 
         existing_relation = (
-            CompanyUserRepository
-            .get_by_company_and_user(
+            CompanyUserRepository.get_by_company_and_user(
                 db,
                 company_id,
                 user.id
@@ -147,7 +138,75 @@ class CompanyUserService:
 
         except IntegrityError:
             db.rollback()
-
             raise ValueError(
                 "No se pudo registrar el usuario en la empresa"
             )
+
+    @staticmethod
+    def get_by_company(
+        db: Session,
+        company_id: int
+    ):
+        company = CompanyRepository.get_by_id(
+            db,
+            company_id
+        )
+
+        if not company:
+            raise ValueError("La empresa no existe")
+
+        return CompanyUserRepository.get_by_company(
+            db,
+            company_id
+        )
+
+    @staticmethod
+    def deactivate_user(
+        db: Session,
+        company_user_id: int,
+        token: str
+    ):
+        current_user = get_current_user(
+            db,
+            token
+        )
+
+        company_user = CompanyUserRepository.get_by_id(
+            db,
+            company_user_id
+        )
+
+        if not company_user:
+            raise ValueError(
+                "La relación empresa-usuario no existe"
+            )
+
+        admin_relation = (
+            CompanyUserRepository.get_admin_by_company_and_user(
+                db,
+                company_user.company_id,
+                current_user.id
+            )
+        )
+
+        if not admin_relation:
+            raise ValueError(
+                "El usuario no es administrador de esta empresa"
+            )
+
+        if company_user.is_admin:
+            raise ValueError(
+                "No se puede desactivar al administrador principal"
+            )
+
+        if not company_user.is_active:
+            raise ValueError(
+                "El usuario ya está inactivo"
+            )
+
+        company_user.is_active = False
+
+        return CompanyUserRepository.update(
+            db,
+            company_user
+        )

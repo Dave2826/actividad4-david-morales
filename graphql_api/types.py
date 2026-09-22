@@ -72,3 +72,10 @@ class CompanyUserType:
     is_admin: bool
     is_active: bool
     joined_at: datetime
+    
+@strawberry.input
+class CreateCompanyUserInput:
+    company_id: int
+    name: str
+    email: str
+    password: str

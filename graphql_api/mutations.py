@@ -9,6 +9,7 @@ from graphql_api.types import (
     CompanyUserType,
     CreateCompanyAdminInput,
     CreateCompanyInput,
+    CreateCompanyUserInput,
     LoginInput,
     UpdateCompanyInput,
 )
@@ -164,6 +165,109 @@ class Mutation:
                 name=input.name,
                 email=input.email,
                 password=input.password
+            )
+
+            return to_company_user_type(company_user)
+
+        except ValueError as error:
+            raise ValueError(str(error))
+
+        finally:
+            db.close()
+
+    @strawberry.mutation
+    def create_company_user(
+        self,
+        input: CreateCompanyUserInput,
+        info: strawberry.Info
+    ) -> CompanyUserType:
+        db: Session = SessionLocal()
+
+        try:
+            authorization = info.context.get(
+                "request"
+            ).headers.get(
+                "Authorization"
+            )
+
+            if not authorization:
+                raise ValueError(
+                    "Se requiere autenticación"
+                )
+
+            if not authorization.startswith("Bearer "):
+                raise ValueError(
+                    "Formato de autorización inválido"
+                )
+
+            token = authorization.replace(
+                "Bearer ",
+                "",
+                1
+            ).strip()
+
+            if not token:
+                raise ValueError(
+                    "Se requiere un token válido"
+                )
+
+            company_user = CompanyUserService.create_user(
+                db=db,
+                company_id=input.company_id,
+                name=input.name,
+                email=input.email,
+                password=input.password,
+                token=token
+            )
+
+            return to_company_user_type(company_user)
+
+        except ValueError as error:
+            raise ValueError(str(error))
+
+        finally:
+            db.close()
+
+    @strawberry.mutation
+    def deactivate_company_user(
+        self,
+        id: int,
+        info: strawberry.Info
+    ) -> CompanyUserType:
+        db: Session = SessionLocal()
+
+        try:
+            authorization = info.context.get(
+                "request"
+            ).headers.get(
+                "Authorization"
+            )
+
+            if not authorization:
+                raise ValueError(
+                    "Se requiere autenticación"
+                )
+
+            if not authorization.startswith("Bearer "):
+                raise ValueError(
+                    "Formato de autorización inválido"
+                )
+
+            token = authorization.replace(
+                "Bearer ",
+                "",
+                1
+            ).strip()
+
+            if not token:
+                raise ValueError(
+                    "Se requiere un token válido"
+                )
+
+            company_user = CompanyUserService.deactivate_user(
+                db=db,
+                company_user_id=id,
+                token=token
             )
 
             return to_company_user_type(company_user)

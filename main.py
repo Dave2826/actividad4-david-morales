@@ -1,5 +1,5 @@
 import strawberry
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from strawberry.fastapi import GraphQLRouter
 
 from graphql_api.mutations import Mutation
@@ -20,7 +20,17 @@ schema = strawberry.Schema(
     )
 )
 
-graphql_app = GraphQLRouter(schema)
+
+async def get_context(request: Request):
+    return {
+        "request": request
+    }
+
+
+graphql_app = GraphQLRouter(
+    schema,
+    context_getter=get_context
+)
 
 
 app.include_router(
@@ -44,3 +54,4 @@ def obtener_sistema():
         "framework": "FastAPI",
         "ambiente": "Docker"
     }
+    
