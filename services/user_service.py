@@ -3,6 +3,7 @@ from pwdlib import PasswordHash
 
 from models.user import User
 from repositories.user_repository import UserRepository
+from email_validator import EmailNotValidError, validate_email
 
 
 password_hash = PasswordHash.recommended()
@@ -41,6 +42,10 @@ class UserService:
             raise ValueError("El correo electrónico es obligatorio")
 
         email = UserService.normalize_email(email)
+        try:
+            email = validate_email(email, check_deliverability=False).normalized
+        except EmailNotValidError:
+            raise ValueError("El correo electrónico no es válido")
 
         existing_user = UserRepository.get_by_email(db, email)
 

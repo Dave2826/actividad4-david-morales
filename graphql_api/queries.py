@@ -6,7 +6,8 @@ from database.database import SessionLocal
 
 from graphql_api.types import (
     CompanyType,
-    CompanyUserType
+    CompanyUserType,
+    UserType
 )
 
 from services.company_service import CompanyService
@@ -15,7 +16,7 @@ from services.company_user_service import CompanyUserService
 
 def to_company_type(company):
     return CompanyType(
-        id=company.id,
+        id=strawberry.ID(str(company.id)),
         name=company.name,
         legal_name=company.legal_name,
         tax_id=company.tax_id,
@@ -27,14 +28,28 @@ def to_company_type(company):
     )
 
 
+def to_user_type(user):
+    return UserType(
+        id=strawberry.ID(str(user.id)),
+        name=user.name,
+        email=user.email,
+        email_verified=user.email_verified,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
+
+
 def to_company_user_type(company_user):
     return CompanyUserType(
-        id=company_user.id,
-        company_id=company_user.company_id,
-        user_id=company_user.user_id,
+        id=strawberry.ID(str(company_user.id)),
+        company_id=strawberry.ID(str(company_user.company_id)),
+        user_id=strawberry.ID(str(company_user.user_id)),
         is_admin=company_user.is_admin,
         is_active=company_user.is_active,
         joined_at=company_user.joined_at,
+        company=to_company_type(company_user.company),
+        user=to_user_type(company_user.user),
     )
 
 
@@ -66,7 +81,7 @@ class Query:
     @strawberry.field
     def company(
         self,
-        id: int
+        id: strawberry.ID
     ) -> CompanyType | None:
 
         db: Session = SessionLocal()
@@ -74,7 +89,7 @@ class Query:
         try:
             company = CompanyService.get_by_id(
                 db,
-                id
+                int(id)
             )
 
             return (
@@ -89,7 +104,7 @@ class Query:
     @strawberry.field
     def company_users(
         self,
-        company_id: int
+        company_id: strawberry.ID
     ) -> list[CompanyUserType]:
 
         db: Session = SessionLocal()
@@ -97,7 +112,7 @@ class Query:
         try:
             company_users = CompanyUserService.get_by_company(
                 db,
-                company_id
+                int(company_id)
             )
 
             return [

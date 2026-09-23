@@ -2,6 +2,7 @@ import strawberry
 from sqlalchemy.orm import Session
 
 from database.database import SessionLocal
+
 from graphql_api.types import (
     AuthPayloadType,
     AuthUserType,
@@ -13,6 +14,7 @@ from graphql_api.types import (
     LoginInput,
     UpdateCompanyInput,
 )
+
 from services.auth_service import AuthService
 from services.company_service import CompanyService
 from services.company_user_service import CompanyUserService
@@ -20,7 +22,7 @@ from services.company_user_service import CompanyUserService
 
 def to_company_type(company):
     return CompanyType(
-        id=company.id,
+        id=strawberry.ID(str(company.id)),
         name=company.name,
         legal_name=company.legal_name,
         tax_id=company.tax_id,
@@ -32,14 +34,38 @@ def to_company_type(company):
     )
 
 
+def to_auth_user_type(user):
+    return AuthUserType(
+        id=strawberry.ID(str(user.id)),
+        name=user.name,
+        email=user.email,
+    )
+
+
 def to_company_user_type(company_user):
     return CompanyUserType(
-        id=company_user.id,
-        company_id=company_user.company_id,
-        user_id=company_user.user_id,
+        id=strawberry.ID(str(company_user.id)),
+        company_id=strawberry.ID(str(company_user.company_id)),
+        user_id=strawberry.ID(str(company_user.user_id)),
         is_admin=company_user.is_admin,
         is_active=company_user.is_active,
         joined_at=company_user.joined_at,
+        company=to_company_type(company_user.company),
+        user=graphql_user_type(company_user.user),
+    )
+
+
+def graphql_user_type(user):
+    from graphql_api.types import UserType
+
+    return UserType(
+        id=strawberry.ID(str(user.id)),
+        name=user.name,
+        email=user.email,
+        email_verified=user.email_verified,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
     )
 
 
@@ -51,6 +77,7 @@ class Mutation:
         self,
         input: CreateCompanyInput
     ) -> CompanyType:
+
         db: Session = SessionLocal()
 
         try:
@@ -76,12 +103,13 @@ class Mutation:
         self,
         input: UpdateCompanyInput
     ) -> CompanyType:
+
         db: Session = SessionLocal()
 
         try:
             company = CompanyService.update(
                 db=db,
-                company_id=input.id,
+                company_id=int(input.id),
                 name=input.name,
                 legal_name=input.legal_name,
                 tax_id=input.tax_id,
@@ -101,14 +129,15 @@ class Mutation:
     @strawberry.mutation
     def deactivate_company(
         self,
-        id: int
+        id: strawberry.ID
     ) -> CompanyType:
+
         db: Session = SessionLocal()
 
         try:
             company = CompanyService.deactivate(
                 db,
-                id
+                int(id)
             )
 
             return to_company_type(company)
@@ -124,6 +153,7 @@ class Mutation:
         self,
         input: LoginInput
     ) -> AuthPayloadType:
+
         db: Session = SessionLocal()
 
         try:
@@ -138,11 +168,7 @@ class Mutation:
             return AuthPayloadType(
                 token=result["token"],
                 token_type=result["token_type"],
-                user=AuthUserType(
-                    id=user.id,
-                    name=user.name,
-                    email=user.email
-                )
+                user=to_auth_user_type(user)
             )
 
         except ValueError as error:
@@ -156,12 +182,13 @@ class Mutation:
         self,
         input: CreateCompanyAdminInput
     ) -> CompanyUserType:
+
         db: Session = SessionLocal()
 
         try:
             company_user = CompanyUserService.create_admin(
                 db=db,
-                company_id=input.company_id,
+                company_id=int(input.company_id),
                 name=input.name,
                 email=input.email,
                 password=input.password
@@ -181,6 +208,7 @@ class Mutation:
         input: CreateCompanyUserInput,
         info: strawberry.Info
     ) -> CompanyUserType:
+
         db: Session = SessionLocal()
 
         try:
@@ -213,7 +241,7 @@ class Mutation:
 
             company_user = CompanyUserService.create_user(
                 db=db,
-                company_id=input.company_id,
+                company_id=int(input.company_id),
                 name=input.name,
                 email=input.email,
                 password=input.password,
@@ -231,9 +259,10 @@ class Mutation:
     @strawberry.mutation
     def deactivate_company_user(
         self,
-        id: int,
+        id: strawberry.ID,
         info: strawberry.Info
     ) -> CompanyUserType:
+
         db: Session = SessionLocal()
 
         try:
@@ -266,7 +295,7 @@ class Mutation:
 
             company_user = CompanyUserService.deactivate_user(
                 db=db,
-                company_user_id=id,
+                company_user_id=int(id),
                 token=token
             )
 
