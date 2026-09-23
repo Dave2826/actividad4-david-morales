@@ -1,22 +1,28 @@
-# Actividad 3 - CRUD con FastAPI, PostgreSQL y Alembic
+# Actividad 4 - Gestión de Empresas y Usuarios con FastAPI, PostgreSQL y GraphQL
 
 ## 1. Descripción
 
-Esta actividad consiste en desarrollar una API REST utilizando FastAPI y PostgreSQL, implementando operaciones CRUD para la gestión de productos y materias.
+Esta actividad consiste en desarrollar un backend para la gestión de empresas y usuarios asociados a cada empresa.
 
-El proyecto utiliza una arquitectura organizada por capas para separar las responsabilidades de la aplicación. La comunicación con PostgreSQL se realiza mediante SQLAlchemy y las modificaciones de la estructura de la base de datos se gestionan mediante Alembic.
+El proyecto implementa una API mediante FastAPI y GraphQL, utilizando PostgreSQL como sistema gestor de base de datos. La aplicación utiliza SQLAlchemy para el acceso a datos y Alembic para controlar las migraciones de la base de datos.
 
 Además, el proyecto se ejecuta mediante Docker Compose, utilizando contenedores independientes para FastAPI, PostgreSQL y pgAdmin.
+
+Como parte de la actividad se implementó la relación `Empresa–Usuario` mediante la entidad intermedia `CompanyUser`, además de autenticación mediante correo y contraseña, generación de tokens JWT y administración de usuarios por empresa.
 
 ## 2. Tecnologías utilizadas
 
 - Python 3.11
 - FastAPI
 - Uvicorn
-- PostgreSQL 16
+- PostgreSQL
 - SQLAlchemy
 - Psycopg
 - Alembic
+- Strawberry GraphQL
+- pwdlib con Argon2
+- PyJWT
+- email-validator
 - Docker
 - Docker Compose
 - pgAdmin 4
@@ -25,66 +31,53 @@ Además, el proyecto se ejecuta mediante Docker Compose, utilizando contenedores
 
 El backend utiliza una arquitectura por capas para separar las responsabilidades de cada componente.
 
-```mermaid
-flowchart TD
-    A[Cliente] --> B[FastAPI]
-    B --> C[Router]
-    C --> D[Service]
-    D --> E[Repository]
-    E --> F[SQLAlchemy]
-    F --> G[(PostgreSQL)]
-
-    C --> H[Schema]
-    D --> H
-    E --> I[Model]
-    I --> F
-```
-
-### Flujo de una solicitud
-
 ```text
-Cliente
-   |
-   v
-FastAPI
-   |
-   v
-Router
-   |
-   v
-Service
-   |
-   v
-Repository
-   |
-   v
-SQLAlchemy
-   |
-   v
-PostgreSQL
+Cliente GraphQL
+      |
+      v
+   FastAPI
+      |
+      v
+   GraphQL
+      |
+      v
+Queries / Mutations
+      |
+      v
+   Services
+      |
+      v
+ Repositories
+      |
+      v
+  SQLAlchemy
+      |
+      v
+ PostgreSQL
 ```
 
-### Responsabilidades por capa
+### Responsabilidades principales
 
-| Capa | Responsabilidad |
+| Componente | Responsabilidad |
 |---|---|
-| `routers` | Define los endpoints HTTP y recibe las solicitudes |
+| `graphql_api` | Define el esquema GraphQL, queries, mutations y tipos |
 | `services` | Contiene la lógica de negocio |
 | `repositories` | Gestiona el acceso y las operaciones sobre los datos |
 | `models` | Define las tablas mediante modelos SQLAlchemy |
-| `schemas` | Define los datos de entrada y salida de la API |
 | `database` | Configura la conexión con PostgreSQL |
+| `security` | Gestiona contraseñas, autenticación y JWT |
 | `alembic` | Gestiona las migraciones de la base de datos |
 
 ## 4. Estructura del proyecto
 
 ```text
-actividad3_david_morales/
+actividad4_david_morales/
 │
 ├── alembic/
 │   ├── versions/
-│   │   ├── 36447967745f_crear_tabla_productos.py
-│   │   └── 9163137d84dd_crear_tabla_materias.py
+│   │   ├── d2b4557bb05a_crear_tabla_users.py
+│   │   ├── 2fc7a8162604_crear_relacion_empresa_usuario.py
+│   │   └── b5eaa79d5e9f_garantizar_un_administrador_principal_.py
 │   ├── env.py
 │   ├── README
 │   └── script.py.mako
@@ -93,32 +86,34 @@ actividad3_david_morales/
 │   ├── database.py
 │   └── __init__.py
 │
-├── evidencias/
+├── graphql_api/
+│   ├── __init__.py
+│   ├── mutations.py
+│   ├── queries.py
+│   ├── schema.py
+│   └── types.py
 │
 ├── models/
-│   ├── materia.py
-│   ├── producto.py
+│   ├── company.py
+│   ├── company_user.py
+│   ├── user.py
 │   └── __init__.py
 │
 ├── repositories/
-│   ├── materia_repository.py
-│   ├── producto_repository.py
+│   ├── company_repository.py
+│   ├── company_user_repository.py
+│   ├── user_repository.py
 │   └── __init__.py
 │
-├── routers/
-│   ├── materias.py
-│   ├── productos.py
-│   └── __init__.py
-│
-├── schemas/
-│   ├── materia.py
-│   ├── producto.py
-│   └── __init__.py
+├── security/
+│   ├── auth.py
+│   └── jwt.py
 │
 ├── services/
-│   ├── materia_service.py
-│   ├── producto_service.py
-│   └── __init__.py
+│   ├── auth_service.py
+│   ├── company_service.py
+│   ├── company_user_service.py
+│   └── user_service.py
 │
 ├── .dockerignore
 ├── .env.example
@@ -131,526 +126,1070 @@ actividad3_david_morales/
 └── requirements.txt
 ```
 
-## 5. Base de datos
+## 5. Modelo de datos
 
-La aplicación utiliza PostgreSQL como sistema gestor de base de datos.
-
-La base de datos utilizada es:
+La actividad utiliza tres entidades principales para representar la relación entre empresas y usuarios.
 
 ```text
-actividad3
+COMPANY
+   |
+   | 1:N
+   |
+   v
+COMPANY_USER
+   ^
+   |
+   | N:1
+   |
+  USER
 ```
 
-Dentro de la base de datos se encuentran las tablas utilizadas por la aplicación:
+### Company
+
+La entidad `Company` representa a las empresas registradas en el sistema.
+
+Entre sus principales atributos se encuentran:
+
+- `id`
+- `name`
+- `legal_name`
+- `tax_id`
+- `email`
+- `phone`
+- `is_active`
+- `created_at`
+- `updated_at`
+
+### User
+
+La entidad `User` representa a los usuarios del sistema.
+
+Entre sus principales atributos se encuentran:
+
+- `id`
+- `name`
+- `email`
+- `password_hash`
+- `email_verified`
+- `is_active`
+- `created_at`
+- `updated_at`
+
+### CompanyUser
+
+La entidad `CompanyUser` representa la relación entre una empresa y un usuario.
+
+Contiene:
+
+- `id`
+- `company_id`
+- `user_id`
+- `is_admin`
+- `is_active`
+- `joined_at`
+
+La relación permite almacenar información específica del usuario dentro de una empresa.
+
+## 6. Relación Empresa–Usuario
+
+La relación entre `Company` y `User` se implementa mediante `CompanyUser`.
+
+Esto permite mantener separada la información global del usuario de la información correspondiente a su relación con una empresa.
+
+Por ejemplo, un usuario puede tener:
 
 ```text
-productos
-materias
-alembic_version
+User
+├── id
+├── name
+├── email
+└── password_hash
 ```
 
-La tabla `alembic_version` es utilizada por Alembic para controlar la versión actual de las migraciones.
-
-### 5.1 Tabla `productos`
-
-La tabla `productos` contiene los siguientes campos:
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `id` | Integer | Identificador único del producto |
-| `nombre` | String | Nombre del producto |
-| `descripcion` | String | Descripción del producto |
-| `precio` | Float | Precio del producto |
-| `stock` | Integer | Cantidad disponible |
-
-### 5.2 Tabla `materias`
-
-La tabla `materias` contiene los siguientes campos:
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `id` | Integer | Identificador único de la materia |
-| `nombre` | String | Nombre de la materia |
-
-La tabla fue creada mediante una migración de Alembic y posteriormente fue utilizada para realizar las operaciones CRUD.
-
-## 6. Migraciones con Alembic
-
-Alembic se utiliza para controlar la evolución de la estructura de la base de datos.
-
-Las migraciones utilizadas en el proyecto son:
+Y su relación con una empresa puede contener:
 
 ```text
-36447967745f_crear_tabla_productos.py
-9163137d84dd_crear_tabla_materias.py
+CompanyUser
+├── company_id
+├── user_id
+├── is_admin
+├── is_active
+└── joined_at
 ```
 
-La primera migración crea la tabla `productos`.
+También se establecieron relaciones ORM mediante SQLAlchemy:
 
-La segunda migración crea la tabla `materias`.
-
-Para aplicar todas las migraciones:
-
-```bash
-alembic upgrade head
+```python
+company_users = relationship(
+    "CompanyUser",
+    back_populates="company"
+)
 ```
 
-Para consultar la migración actual:
+y:
 
-```bash
-alembic current
+```python
+company = relationship(
+    "Company",
+    back_populates="company_users"
+)
+
+user = relationship(
+    "User",
+    back_populates="company_users"
+)
 ```
 
-Para verificar si existen cambios pendientes:
+## 7. Regla del administrador principal
 
-```bash
-alembic check
+Una de las reglas principales de la actividad establece que una empresa solamente puede tener un administrador principal.
+
+La regla se implementó en la lógica de negocio y también directamente en PostgreSQL mediante un índice único parcial.
+
+```sql
+CREATE UNIQUE INDEX uq_company_principal_admin
+ON company_users (company_id)
+WHERE is_admin = true;
 ```
 
-La validación realizada devolvió:
+Con esta restricción, PostgreSQL impide que una misma empresa tenga dos registros con:
 
 ```text
-No new upgrade operations detected.
+is_admin = true
 ```
 
-Esto indica que no existen nuevas operaciones de migración pendientes.
-# 7. Ejecución con Docker
-
-El proyecto utiliza Docker Compose para ejecutar los servicios necesarios.
-
-Los servicios utilizados son:
-
-| Servicio | Contenedor | Puerto |
-|---|---|---|
-| FastAPI | `fastapi-api-actividad3` | `8000` |
-| PostgreSQL | `postgres-actividad3` | `5432` |
-| pgAdmin | `pgadmin-actividad3` | `5050` |
-
-### Arquitectura de los contenedores
-
-```mermaid
-flowchart LR
-    A[Cliente] --> B[FastAPI]
-    B --> C[(PostgreSQL)]
-    D[pgAdmin] --> C
-```
-
-### 7.1 Construir e iniciar el proyecto
-
-```bash
-docker compose up -d --build
-```
-
-### 7.2 Consultar los contenedores
-
-```bash
-docker compose ps
-```
-
-### 7.3 Detener los servicios
-
-```bash
-docker compose stop
-```
-
-### 7.4 Iniciar nuevamente los servicios
-
-```bash
-docker compose start
-```
-
-# 8. Documentación de la API
-
-FastAPI proporciona una documentación interactiva mediante Swagger UI.
-
-Con los contenedores funcionando, la documentación se encuentra disponible en:
+Cuando se intenta registrar un segundo administrador para la misma empresa, la aplicación devuelve:
 
 ```text
-http://localhost:8000/docs
+La empresa ya tiene un administrador principal
 ```
 
-Desde esta interfaz es posible consultar y ejecutar directamente los endpoints de la API.
+## 8. Autenticación y seguridad
 
-La documentación organiza los endpoints en los grupos:
+El proyecto implementa autenticación mediante correo electrónico y contraseña.
 
-- `default`
-- `Productos`
-- `Materias`
+Las contraseñas no se almacenan directamente en la base de datos.
 
-La sección `Productos` contiene las operaciones CRUD correspondientes y el endpoint adicional de productos disponibles.
-
-La sección `Materias` contiene las operaciones CRUD implementadas para este recurso.
-
-# 9. Endpoints de productos
-
-El recurso `productos` cuenta con las siguientes operaciones:
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `POST` | `/productos` | Crear producto |
-| `GET` | `/productos` | Obtener todos los productos |
-| `GET` | `/productos/disponibles` | Obtener productos con stock disponible |
-| `GET` | `/productos/{producto_id}` | Obtener producto por ID |
-| `PUT` | `/productos/{producto_id}` | Actualizar producto |
-| `DELETE` | `/productos/{producto_id}` | Eliminar producto |
-
-## 9.1 Consulta de productos disponibles
-
-Como parte del reto adicional se implementó:
+El flujo utilizado es:
 
 ```text
-GET /productos/disponibles
+Contraseña
+    |
+    v
+Validación
+    |
+    v
+Argon2
+    |
+    v
+password_hash
+    |
+    v
+PostgreSQL
 ```
 
-Este endpoint devuelve únicamente los productos cuyo stock es mayor que cero.
+Para realizar la autenticación se utiliza la mutation `login`.
 
-La condición utilizada para esta consulta es:
+El flujo de autenticación es:
 
 ```text
-stock > 0
+Correo + contraseña
+        |
+        v
+Buscar usuario
+        |
+        v
+Verificar contraseña
+        |
+        v
+Comprobar usuario activo
+        |
+        v
+Generar JWT
+        |
+        v
+Token Bearer
 ```
 
-# 10. Endpoints de materias
+El token generado utiliza JWT y contiene información necesaria para identificar al usuario autenticado.
 
-El recurso `materias` cuenta con un CRUD completo:
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `POST` | `/materias` | Crear materia |
-| `GET` | `/materias` | Obtener todas las materias |
-| `GET` | `/materias/{materia_id}` | Obtener una materia por ID |
-| `PUT` | `/materias/{materia_id}` | Actualizar una materia |
-| `DELETE` | `/materias/{materia_id}` | Eliminar una materia |
-
-# 11. Pruebas del CRUD de materias
-
-Para comprobar el funcionamiento del CRUD se realizaron operaciones reales mediante Swagger UI.
-
-El flujo de pruebas fue:
-
-```mermaid
-flowchart TD
-    A[Crear materias] --> B[Consultar listado inicial]
-    B --> C[Obtener materia por ID]
-    C --> D[Actualizar materia]
-    D --> E[Verificar actualización]
-    E --> F[Eliminar materia]
-    F --> G[Consultar listado final]
-    G --> H[Comprobar registros en PostgreSQL]
-    H --> I[Reiniciar API]
-    I --> J[Comprobar persistencia]
-```
-
-## 11.1 Crear materias
-
-Se utilizaron solicitudes `POST` para crear tres registros de materias.
-
-![Creación de tres materias](<evidencias/POST → crear 3 materias(1).png>)
-
-## 11.2 Listado inicial
-
-Después de crear los registros se realizó una consulta mediante:
+Las operaciones protegidas utilizan el siguiente encabezado:
 
 ```text
-GET /materias
+Authorization: Bearer <token>
 ```
 
-La respuesta permitió comprobar que los registros habían sido almacenados correctamente.
+## 9. Hash de contraseñas
 
-![Listado inicial de materias](evidencias/materias-listado-inicial.png)
+Para proteger las contraseñas se utiliza Argon2 mediante `pwdlib`.
 
-## 11.3 Obtener materia por ID
+El valor almacenado en la base de datos corresponde al hash de la contraseña y no a la contraseña original.
 
-Se realizó una consulta mediante:
+Ejemplo del formato almacenado:
 
 ```text
-GET /materias/{materia_id}
+$argon2id$...
 ```
 
-Para la prueba se utilizó el ID `4`.
+Esto permite verificar posteriormente la contraseña mediante el hash almacenado sin guardar la contraseña original.
 
-La respuesta permitió recuperar la materia correspondiente al identificador indicado.
+## 10. Validación de correos
 
-![Obtener materia por ID](evidencias/materia-obtener-por-id.png)
+Los correos electrónicos son normalizados y validados antes de crear un usuario.
 
-## 11.4 Actualizar materia
+La aplicación utiliza `email-validator`.
 
-Se realizó una modificación mediante:
+Un correo con formato incorrecto es rechazado.
+
+Ejemplo:
 
 ```text
-PUT /materias/{materia_id}
+correo-invalido
 ```
 
-En la prueba se actualizó el registro con ID `4`.
-
-La respuesta HTTP fue `200`, indicando que la operación se realizó correctamente.
-
-![Actualizar materia](evidencias/materia-actualizar.png)
-
-## 11.5 Verificar actualización
-
-Después de realizar la actualización se ejecutó nuevamente:
+Respuesta:
 
 ```text
-GET /materias/{materia_id}
+El correo electrónico no es válido
 ```
 
-La respuesta permitió comprobar que el nuevo nombre quedó almacenado correctamente.
+También se valida que el correo no se encuentre registrado previamente.
 
-![Verificación de actualización](evidencias/materia-verificar-actualizacion.png)
-
-## 11.6 Eliminar materia
-
-Posteriormente se ejecutó:
+Si el correo ya existe:
 
 ```text
-DELETE /materias/{materia_id}
+El correo electrónico ya está registrado
 ```
 
-La API respondió correctamente indicando que la materia fue eliminada.
+## 11. Esquema GraphQL
 
-La respuesta obtenida fue:
+El proyecto utiliza Strawberry GraphQL para definir la API.
 
-```json
-{
-    "mensaje": "Materia eliminada correctamente"
+Los identificadores utilizan `ID` y los campos de fecha utilizan el escalar personalizado `Time`.
+
+### Tipo User
+
+```graphql
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  emailVerified: Boolean!
+  isActive: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
 }
 ```
 
-La operación devolvió código HTTP `200`.
+### Tipo CompanyUser
 
-![Eliminar materia](evidencias/materia-eliminar.png)
+```graphql
+type CompanyUser {
+  id: ID!
+  companyId: ID!
+  userId: ID!
+  isAdmin: Boolean!
+  isActive: Boolean!
+  joinedAt: Time!
+  company: Company!
+  user: User!
+}
+```
 
-## 11.7 Listado final
+### LoginInput
 
-Después de eliminar el registro de prueba se ejecutó nuevamente:
+```graphql
+input LoginInput {
+  email: String!
+  password: String!
+}
+```
+
+### AuthUser
+
+```graphql
+type AuthUser {
+  id: ID!
+  name: String!
+  email: String!
+}
+```
+
+### AuthPayload
+
+```graphql
+type AuthPayload {
+  token: String!
+  tokenType: String!
+  user: AuthUser!
+}
+```
+
+### CreateCompanyAdminInput
+
+```graphql
+input CreateCompanyAdminInput {
+  companyId: ID!
+  name: String!
+  email: String!
+  password: String!
+}
+```
+
+### CreateCompanyUserInput
+
+```graphql
+input CreateCompanyUserInput {
+  companyId: ID!
+  name: String!
+  email: String!
+  password: String!
+}
+```
+
+## 12. Queries
+
+La consulta principal relacionada con la actividad es:
+
+```graphql
+companyUsers(companyId: ID!): [CompanyUser!]!
+```
+
+Esta query permite obtener todos los usuarios relacionados con una empresa.
+
+Ejemplo:
+
+```graphql
+query {
+  companyUsers(companyId: "1") {
+    id
+    companyId
+    userId
+    isAdmin
+    isActive
+    joinedAt
+    company {
+      id
+      name
+      legalName
+      isActive
+    }
+    user {
+      id
+      name
+      email
+      emailVerified
+      isActive
+    }
+  }
+}
+```
+
+Esta consulta también permite comprobar las relaciones anidadas entre:
 
 ```text
-GET /materias
+CompanyUser
+    |
+    +-- Company
+    |
+    +-- User
 ```
 
-El resultado permitió comprobar que la materia eliminada ya no aparecía en el listado.
+## 13. Mutations
 
-![Listado final de materias](evidencias/materias-listado-final.png)
-# 12. Evidencias en PostgreSQL
+Las principales mutations implementadas son:
 
-Además de las pruebas realizadas mediante Swagger UI, se realizaron comprobaciones directamente sobre PostgreSQL utilizando pgAdmin.
-
-## 12.1 Tabla `materias`
-
-La tabla `materias` se encuentra creada dentro del esquema `public` de la base de datos `actividad3`.
-
-![Tabla materias en PostgreSQL](<evidencias/materias-tabla-postgresql(1).png>)
-
-## 12.2 Registros almacenados
-
-Para comprobar directamente los registros almacenados se utilizó la consulta:
-
-```sql
-SELECT *
-FROM public.materias
-ORDER BY id ASC;
-```
-
-El resultado permitió verificar los registros existentes directamente desde PostgreSQL.
-
-![Registros finales de materias](evidencias/materias-registros-finales.png)
-
-# 13. Prueba de persistencia
-
-Para comprobar la persistencia de los datos se detuvo y posteriormente se inició nuevamente el contenedor de FastAPI.
-
-Primero:
-
-```bash
-docker compose stop api
-```
-
-Después:
-
-```bash
-docker compose start api
-```
-
-Una vez iniciado nuevamente el servicio se realizó otra consulta:
-
-```text
-GET /materias
-```
-
-Los registros continuaron disponibles después de reiniciar el servicio.
-
-Esto demuestra que la información permanece almacenada en PostgreSQL y no depende únicamente de la ejecución actual de FastAPI.
-
-![Prueba de persistencia](evidencias/materias-persistencia.png)
-
-# 14. Validaciones realizadas
-
-Durante el desarrollo y las pruebas del proyecto se verificaron los siguientes puntos:
-
-- FastAPI inicia correctamente.
-- Swagger UI funciona correctamente.
-- PostgreSQL funciona como sistema gestor de base de datos.
-- pgAdmin permite consultar la base de datos.
-- Docker Compose inicia los servicios necesarios.
-- La aplicación puede conectarse con PostgreSQL.
-- Alembic aplica correctamente las migraciones.
-- La tabla `productos` existe en la base de datos.
-- La tabla `materias` existe en la base de datos.
-- El CRUD de productos funciona.
-- El endpoint `/productos/disponibles` funciona.
-- El CRUD de materias funciona.
-- Las materias pueden crearse correctamente.
-- Las materias pueden consultarse mediante listado.
-- Las materias pueden consultarse mediante su ID.
-- Las materias pueden actualizarse.
-- Las materias pueden eliminarse.
-- Los cambios realizados mediante la API se reflejan en PostgreSQL.
-- Los registros permanecen después de reiniciar el servicio.
-
-# 15. Variables de entorno
-
-Las configuraciones sensibles se manejan mediante variables de entorno.
-
-El archivo `.env` se utiliza localmente para configurar los parámetros de conexión y ejecución.
-
-Entre las variables utilizadas se encuentran:
-
-```text
-APP_PORT
-DB_USER
-DB_PASSWORD
-DB_HOST
-DB_PORT
-DB_NAME
-POSTGRES_USER
-POSTGRES_PASSWORD
-POSTGRES_DB
-PGADMIN_EMAIL
-PGADMIN_PASSWORD
-```
-
-El archivo `.env` no se incluye en el repositorio.
-
-En su lugar se proporciona:
-
-```text
-.env.example
-```
-
-Este archivo sirve como referencia para configurar el entorno local sin publicar credenciales.
-
-# 16. Organización del código
-
-La aplicación se encuentra separada en diferentes módulos para evitar concentrar toda la lógica en un solo archivo.
-
-```text
-routers
-   |
-   v
-services
-   |
-   v
-repositories
-   |
-   v
-models
-   |
-   v
-database
-```
-
-Los `schemas` se utilizan para validar y estructurar los datos recibidos y enviados por la API.
-
-Esta separación permite mantener responsabilidades independientes y facilita el mantenimiento y ampliación del proyecto.
-
-# 17. Flujo general de la aplicación
-
-```mermaid
-sequenceDiagram
-    participant C as Cliente
-    participant R as Router
-    participant S as Service
-    participant RP as Repository
-    participant DB as PostgreSQL
-
-    C->>R: Solicitud HTTP
-    R->>S: Datos validados
-    S->>RP: Operación solicitada
-    RP->>DB: Consulta o modificación
-    DB-->>RP: Resultado
-    RP-->>S: Datos
-    S-->>R: Resultado
-    R-->>C: Respuesta HTTP
-```
-
-Este flujo representa la forma en que una solicitud atraviesa las diferentes capas de la aplicación.
-
-# 18. Evidencias del proyecto
-
-Las evidencias se encuentran organizadas dentro de la carpeta:
-
-```text
-evidencias/
-```
-
-Las capturas documentan las principales pruebas realizadas:
-
-| Evidencia | Descripción |
+| Mutation | Descripción |
 |---|---|
-| `POST → crear 3 materias(1).png` | Creación de materias mediante POST |
-| `materias-listado-inicial.png` | Listado inicial de materias |
-| `materia-obtener-por-id.png` | Consulta de una materia mediante ID |
-| `materia-actualizar.png` | Actualización de una materia |
-| `materia-verificar-actualizacion.png` | Verificación del cambio realizado |
-| `materia-eliminar.png` | Eliminación de una materia |
-| `materias-listado-final.png` | Listado después de eliminar el registro de prueba |
-| `materias-tabla-postgresql(1).png` | Evidencia de la tabla en PostgreSQL |
-| `materias-registros-finales.png` | Consulta de registros directamente en PostgreSQL |
-| `materias-persistencia.png` | Comprobación de persistencia después de reiniciar la API |
+| `createCompany` | Crea una empresa |
+| `updateCompany` | Actualiza una empresa |
+| `deactivateCompany` | Desactiva una empresa |
+| `login` | Autentica un usuario y genera un JWT |
+| `createCompanyAdmin` | Crea el administrador principal |
+| `createCompanyUser` | Crea un usuario dentro de una empresa |
+| `deactivateCompanyUser` | Desactiva la relación del usuario con una empresa |
 
-# 19. Resultado
+### Crear administrador principal
 
-El proyecto cuenta con una API REST funcional desarrollada con FastAPI y conectada a PostgreSQL.
-
-Se implementaron operaciones CRUD para los recursos:
-
-```text
-productos
-materias
+```graphql
+mutation {
+  createCompanyAdmin(
+    input: {
+      companyId: "1"
+      name: "David Morales"
+      email: "admin@demo.com"
+      password: "Datos2026"
+    }
+  ) {
+    id
+    companyId
+    userId
+    isAdmin
+    isActive
+  }
+}
 ```
 
-También se implementó el reto adicional:
+### Crear usuario de empresa
 
-```text
-GET /productos/disponibles
+Esta operación requiere autenticación mediante un JWT de un administrador de la empresa.
+
+```graphql
+mutation {
+  createCompanyUser(
+    input: {
+      companyId: "1"
+      name: "Usuario Demo"
+      email: "usuario@demo.com"
+      password: "Usuario2026"
+    }
+  ) {
+    id
+    companyId
+    userId
+    isAdmin
+    isActive
+  }
+}
 ```
 
-La estructura del proyecto se organizó mediante capas de:
+### Desactivar usuario de empresa
 
-```text
-routers
-services
-repositories
-models
-schemas
-database
+```graphql
+mutation {
+  deactivateCompanyUser(id: "2") {
+    id
+    companyId
+    userId
+    isAdmin
+    isActive
+  }
+}
 ```
 
-La estructura de la base de datos se controla mediante Alembic y la aplicación se ejecuta mediante Docker Compose.
+La desactivación se realiza sobre `CompanyUser`.
 
-Las pruebas realizadas mediante Swagger UI y pgAdmin permitieron comprobar el funcionamiento de las operaciones y la persistencia de la información.
+Por lo tanto, el usuario puede continuar existiendo como usuario global mientras su relación específica con una empresa se encuentra inactiva.
 
-# 20. Conclusión
+## 14. Migraciones con Alembic
 
-El desarrollo de esta actividad permitió integrar diferentes componentes necesarios para construir un backend organizado y funcional.
+El proyecto utiliza Alembic para controlar la estructura y evolución de la base de datos.
 
-FastAPI permitió crear y documentar los endpoints de la API, mientras que PostgreSQL se utilizó para almacenar de manera persistente la información. SQLAlchemy permitió establecer la comunicación entre los modelos de la aplicación y la base de datos, y Alembic permitió controlar la creación y evolución de las tablas mediante migraciones.
+Durante la actividad se agregaron las siguientes migraciones principales:
 
-La organización por capas permitió separar las responsabilidades del sistema. Los routers se encargan de recibir las solicitudes HTTP, los services concentran la lógica de la aplicación, los repositories gestionan el acceso a los datos, los models representan las tablas de PostgreSQL y los schemas controlan la estructura de los datos que entran y salen de la API.
+```text
+d2b4557bb05a_crear_tabla_users.py
+2fc7a8162604_crear_relacion_empresa_usuario.py
+b5eaa79d5e9f_garantizar_un_administrador_principal_.py
+```
 
-Docker Compose permitió integrar el backend, la base de datos y pgAdmin dentro de un mismo entorno de ejecución, facilitando la configuración y reproducción del proyecto.
+### Crear tabla de usuarios
 
-Finalmente, las pruebas realizadas mediante Swagger UI y pgAdmin permitieron comprobar las operaciones CRUD, verificar los cambios directamente en PostgreSQL y demostrar que los datos permanecen almacenados después de reiniciar el servicio.
+La primera migración relacionada con usuarios crea la tabla `users`.
 
-Con esto se obtuvo un backend funcional, organizado y preparado para futuras ampliaciones.
+Esta tabla contiene información como:
+
+```text
+id
+name
+email
+password_hash
+email_verified
+is_active
+created_at
+updated_at
+```
+
+### Crear relación Empresa–Usuario
+
+La segunda migración crea la tabla `company_users`.
+
+Esta tabla contiene las claves foráneas:
+
+```text
+company_id -> companies.id
+user_id    -> users.id
+```
+
+Además, contiene los campos:
+
+```text
+is_admin
+is_active
+joined_at
+```
+
+### Garantizar un administrador principal
+
+La tercera migración agrega la restricción que garantiza que una empresa no tenga más de un administrador principal.
+
+La restricción se implementa mediante un índice único parcial sobre:
+
+```text
+company_id
+```
+
+cuando:
+
+```text
+is_admin = true
+```
+
+## 15. Docker
+
+El proyecto se ejecuta mediante Docker Compose.
+
+Los servicios principales son:
+
+```text
+FastAPI
+PostgreSQL
+pgAdmin
+```
+
+### Puertos utilizados
+
+| Servicio | Puerto |
+|---|---:|
+| FastAPI | 8001 |
+| PostgreSQL | 5433 |
+| pgAdmin | 5051 |
+
+La comunicación entre los contenedores utiliza la red interna de Docker Compose.
+
+Dentro del contenedor de FastAPI, PostgreSQL se encuentra disponible mediante:
+
+```text
+DB_HOST=postgres
+DB_PORT=5432
+```
+
+Mientras que el puerto `5433` se utiliza para acceder a PostgreSQL desde el equipo local.
+
+## 16. Variables de entorno
+
+La configuración utiliza variables de entorno mediante un archivo `.env`.
+
+Ejemplo de configuración:
+
+```env
+APP_PORT=8001
+
+DB_USER=actividad4_user
+DB_PASSWORD=actividad4_pass
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=actividad4
+
+POSTGRES_PORT=5433
+POSTGRES_USER=actividad4_user
+POSTGRES_PASSWORD=actividad4_pass
+POSTGRES_DB=actividad4
+
+PGADMIN_PORT=5051
+PGADMIN_EMAIL=admin@actividad4.com
+PGADMIN_PASSWORD=Datos2026
+
+JWT_SECRET_KEY=actividad4_david_morales_secret_key_2026
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=60
+```
+
+El archivo `.env` se mantiene fuera del control de versiones mediante `.gitignore`.
+
+Para compartir la configuración del proyecto se utiliza `.env.example`.
+
+## 17. Endpoint GraphQL
+
+La API GraphQL está disponible en:
+
+```text
+http://localhost:8001/graphql
+```
+
+Al acceder a esta dirección se puede utilizar la interfaz de GraphQL para ejecutar queries y mutations.
+
+La documentación y exploración del esquema permiten consultar los tipos, campos, queries y mutations disponibles.
+
+## 18. Pruebas realizadas
+
+Durante la implementación se realizaron diferentes pruebas funcionales directamente sobre GraphQL.
+
+### Crear empresa
+
+Se verificó el funcionamiento de:
+
+```graphql
+createCompany
+```
+
+La empresa fue creada correctamente.
+
+### Actualizar empresa
+
+Se verificó:
+
+```graphql
+updateCompany
+```
+
+La información de la empresa fue actualizada correctamente.
+
+### Desactivar empresa
+
+Se verificó:
+
+```graphql
+deactivateCompany
+```
+
+La empresa cambió correctamente su estado.
+
+Posteriormente se reactivó para continuar con las pruebas de usuarios.
+
+### Crear administrador principal
+
+Se creó correctamente un administrador para la empresa:
+
+```text
+Empresa: Empresa Demo Actualizada
+Usuario: David Morales
+Correo: admin@demo.com
+```
+
+El registro generado presentó:
+
+```text
+isAdmin = true
+isActive = true
+```
+
+### Verificación del hash
+
+Se verificó directamente en la base de datos que la contraseña no se almacena en texto plano.
+
+El registro contiene un hash compatible con Argon2:
+
+```text
+$argon2id$...
+```
+
+### Login correcto
+
+Se realizó autenticación con las credenciales correctas.
+
+La operación devolvió un token JWT.
+
+La respuesta contiene:
+
+```text
+token
+tokenType
+user
+```
+
+### Login incorrecto
+
+Se realizó una prueba utilizando credenciales incorrectas.
+
+La API respondió:
+
+```text
+Credenciales incorrectas
+```
+
+Esto confirma que las credenciales inválidas son rechazadas.
+
+### Crear usuario de empresa
+
+Utilizando el JWT obtenido mediante `login`, se creó correctamente un usuario asociado a la empresa.
+
+Datos utilizados:
+
+```text
+Nombre: Usuario Demo
+Correo: usuario@demo.com
+```
+
+El registro generado presentó:
+
+```text
+isAdmin = false
+isActive = true
+```
+
+### Consultar usuarios de una empresa
+
+Se ejecutó:
+
+```graphql
+query {
+  companyUsers(companyId: "1") {
+    id
+    companyId
+    userId
+    isAdmin
+    isActive
+    joinedAt
+    company {
+      id
+      name
+    }
+    user {
+      id
+      name
+      email
+    }
+  }
+}
+```
+
+La respuesta permitió comprobar las relaciones entre:
+
+```text
+CompanyUser
+Company
+User
+```
+
+### Desactivar usuario
+
+Se ejecutó:
+
+```graphql
+mutation {
+  deactivateCompanyUser(id: "2") {
+    id
+    companyId
+    userId
+    isAdmin
+    isActive
+  }
+}
+```
+
+El resultado confirmó:
+
+```text
+isActive = false
+```
+
+La desactivación se aplicó a la relación `CompanyUser`.
+
+El usuario global permaneció registrado.
+
+## 19. Pruebas de validaciones
+
+También se realizaron pruebas específicas para validar las reglas de negocio.
+
+### Correo duplicado
+
+Se intentó registrar nuevamente:
+
+```text
+usuario@demo.com
+```
+
+La API respondió:
+
+```text
+El correo electrónico ya está registrado
+```
+
+### Segundo administrador
+
+Se intentó crear un segundo administrador para la misma empresa.
+
+La API respondió:
+
+```text
+La empresa ya tiene un administrador principal
+```
+
+Esto confirma la regla de un solo administrador principal por empresa.
+
+### Empresa inexistente
+
+Se intentó crear una relación utilizando:
+
+```text
+companyId = 9999
+```
+
+La API respondió:
+
+```text
+La empresa no existe
+```
+
+### Correo electrónico inválido
+
+Se realizó una prueba utilizando un correo con formato incorrecto.
+
+La API respondió:
+
+```text
+El correo electrónico no es válido
+```
+
+## 20. Manejo de errores
+
+Las operaciones de negocio contienen validaciones antes de realizar cambios en la base de datos.
+
+Entre las situaciones controladas se encuentran:
+
+```text
+Empresa inexistente
+Empresa inactiva
+Usuario inexistente
+Usuario inactivo
+Correo duplicado
+Correo inválido
+Segundo administrador
+Usuario sin permisos administrativos
+Credenciales incorrectas
+Relación Empresa–Usuario inexistente
+```
+
+También se controla `IntegrityError` de SQLAlchemy en las operaciones donde existe riesgo de violar restricciones de la base de datos.
+
+## 21. Organización de servicios
+
+La lógica de negocio se distribuye en diferentes servicios.
+
+### CompanyService
+
+Gestiona las operaciones relacionadas con las empresas:
+
+```text
+Crear empresa
+Actualizar empresa
+Consultar empresa
+Listar empresas
+Desactivar empresa
+```
+
+### UserService
+
+Gestiona los usuarios:
+
+```text
+Crear usuario
+Buscar usuario
+Actualizar usuario
+Validar correo
+Verificar contraseña
+Generar hash
+```
+
+### AuthService
+
+Gestiona la autenticación:
+
+```text
+Login
+Verificación de credenciales
+Generación de JWT
+```
+
+### CompanyUserService
+
+Gestiona la relación entre empresas y usuarios:
+
+```text
+Crear administrador
+Crear usuario de empresa
+Consultar usuarios de empresa
+Desactivar usuario de empresa
+Validar permisos administrativos
+```
+
+## 22. Seguridad
+
+Las principales medidas implementadas son:
+
+- Hash de contraseñas mediante Argon2.
+- Validación y normalización de correos electrónicos.
+- Autenticación mediante JWT.
+- Expiración configurable del token.
+- Validación del usuario autenticado.
+- Verificación de usuarios activos.
+- Control de permisos administrativos.
+- Restricción de un administrador principal por empresa.
+- Variables sensibles mediante `.env`.
+
+## 23. Flujo completo de autenticación
+
+El funcionamiento general del sistema puede representarse de la siguiente manera:
+
+```text
+1. Crear administrador
+        |
+        v
+2. Guardar usuario
+        |
+        v
+3. Generar hash Argon2
+        |
+        v
+4. Crear relación CompanyUser
+        |
+        v
+5. Login
+        |
+        v
+6. Validar correo y contraseña
+        |
+        v
+7. Generar JWT
+        |
+        v
+8. Enviar Bearer Token
+        |
+        v
+9. Crear o administrar usuarios
+        |
+        v
+10. Validar permisos
+        |
+        v
+11. Ejecutar operación
+```
+
+## 24. Flujo de creación de usuarios
+
+El administrador principal puede crear usuarios dentro de su empresa.
+
+```text
+Administrador autenticado
+          |
+          v
+       JWT
+          |
+          v
+createCompanyUser
+          |
+          v
+Validar token
+          |
+          v
+Buscar empresa
+          |
+          v
+Verificar administrador
+          |
+          v
+Validar correo
+          |
+          v
+Crear usuario
+          |
+          v
+Generar hash Argon2
+          |
+          v
+Crear CompanyUser
+          |
+          v
+Usuario creado
+```
+
+## 25. Git y control de versiones
+
+El proyecto se encuentra versionado mediante Git.
+
+Repositorio:
+
+```text
+https://github.com/Dave2826/actividad4-david-morales.git
+```
+
+La rama principal utilizada es:
+
+```text
+main
+```
+
+Los commits principales realizados durante la actividad son:
+
+```text
+21bf204 feat: implementar CRUD de empresas con GraphQL
+1f1c93e feat: implementar usuarios autenticacion y administracion
+1809bd1 feat: implementar gestion de usuarios por empresa
+ab06187 feat: completar gestion de usuarios y relaciones
+```
+
+El último commit contiene la implementación completa de la gestión de usuarios y relaciones entre empresas y usuarios.
+
+Estado final del repositorio:
+
+```text
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+```
+
+## 26. Resultado final
+
+Al finalizar la actividad, el backend permite gestionar empresas, usuarios y las relaciones entre ambos mediante GraphQL.
+
+Las principales funcionalidades implementadas son:
+
+```text
+CRUD de empresas
+        +
+Gestión de usuarios
+        +
+Relación Empresa–Usuario
+        +
+Administrador principal
+        +
+Usuarios de empresa
+        +
+Autenticación
+        +
+JWT
+        +
+Hash Argon2
+        +
+Validación de correo
+        +
+Control de permisos
+        +
+Desactivación de usuarios
+        +
+Consultas GraphQL
+        +
+Docker
+        +
+PostgreSQL
+```
+
+El sistema permite mantener una separación entre la información global del usuario y su participación dentro de una empresa.
+
+La entidad `CompanyUser` permite controlar si un usuario es administrador, si su relación está activa y cuándo se incorporó a la empresa.
+
+Además, la combinación de validaciones en la lógica de negocio y restricciones en PostgreSQL permite mantener las reglas principales de integridad del sistema.
+
+## 27. Conclusión
+
+En esta actividad se implementó la relación entre empresas y usuarios mediante una estructura que permite administrar diferentes usuarios dentro de una empresa y distinguir al administrador principal de los usuarios normales.
+
+La implementación permitió integrar diferentes componentes del backend, incluyendo FastAPI, GraphQL, SQLAlchemy, PostgreSQL, Alembic y Docker. También se incorporó autenticación mediante JWT y protección de contraseñas utilizando Argon2.
+
+Uno de los puntos principales fue establecer la regla de que cada empresa solamente puede contar con un administrador principal. Esta regla no depende únicamente de una validación en el código, ya que también se estableció una restricción en PostgreSQL para mantener la integridad de los datos.
+
+Las pruebas realizadas permitieron comprobar la creación del administrador, creación de usuarios, autenticación correcta e incorrecta, validación de correos, prevención de correos duplicados, prevención de un segundo administrador, validación de empresas inexistentes y desactivación de relaciones Empresa–Usuario.
+
+Con esto se completó la implementación solicitada para la gestión de usuarios y su relación con las empresas dentro del backend.
+
+## 28. Autor
+
+**David Morales Guerrero**
+
+Tecnológico del Software
+
+TSU en Desarrollo e Innovación de Software
+
+Actividad 4 - Fundamentos de Arquitectura de Software y Desarrollo Backend
